@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -6,6 +5,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from detect import is_nsfw
+from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, BaseFilter
 
 load_dotenv()
 
@@ -15,14 +15,19 @@ dp = Dispatcher()
 @dp.message(Command('start'))
 async def start_command(message: types.Message, bot: Bot):
     user = await bot.get_chat(message.from_user.id)
-    channel = await bot.get_chat(user.personal_chat.id)
-    photo = channel.photo
+    user_photo = user.photo
 
-    if not photo:
+    if not user_photo:
         return
-    
 
-    file_info = await bot.get_file(photo.big_file_id)
+    channel = await bot.get_chat(user.personal_chat.id)
+    channel_photo = channel.photo
+
+    if not channel_photo:
+        return
+
+
+    file_info = await bot.get_file(user_photo.big_file_id)
     file_path = file_info.file_path
 
     # Download the photo
@@ -54,7 +59,7 @@ async def start_command(message: types.Message, bot: Bot):
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot, handle_signals=True),
+    await dp.start_polling(bot, handle_signals=True)
 
 
 # Start the bot
