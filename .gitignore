@@ -13,3 +13,4 @@ wheels/
 img
 
 model_int8.tflite
+tmp*
