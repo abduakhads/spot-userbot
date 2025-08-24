@@ -14,6 +14,8 @@ from detect import is_nsfw
 
 load_dotenv()
 
+nsfw_queue = asyncio.Queue()
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 
@@ -25,11 +27,74 @@ class FalseAlertCallback(CallbackData, prefix="false_alert"):
     message_id: int | str 
 
 
+# --- NSFW WORKER ---
+async def nsfw_worker(bot: Bot):
+    """Background worker to process NSFW detection tasks."""
+    print("NSFW Worker started...")
+    while True:
+        task_retrieved = False
+        try:
+            message, image_bytes = await nsfw_queue.get()
+            task_retrieved = True
+
+            result = await asyncio.to_thread(is_nsfw, image_bytes)
+
+            nsfw = result['is_nsfw']
+            nsfw_confidence = result['nsfw_confidence']
+            top_category = result['top_category']
+            top_confidence = result['top_confidence']
+
+            stripped_chat_id = str(message.chat.id).removeprefix("-100")
+            message_link = f"https://t.me/{message.chat.username if message.chat.username else 'c/' + stripped_chat_id}/{message.message_id}"
+
+            user_data = (
+                f"link {message_link}\n\n"
+                f"User: {message.from_user.full_name} (id: {message.from_user.id}) "
+                f"[Profile](tg://user?id={message.from_user.id}) username: @{message.from_user.username}"
+            )
+
+            if nsfw:
+                response = (
+                    f"🚨 NSFW Content Detected! 🚨\n\n"
+                    f"Top Category: {top_category}\n"
+                    f"Confidence: {top_confidence*100:.2f}%\n"
+                    f"NSFW Confidence: {nsfw_confidence*100:.2f}%\n\n"
+                    f"{user_data}"
+                )
+            else:
+                response = (
+                    f"✅ The image seems safe for work!\n\n"
+                    f"Top Category: {top_category}\n"
+                    f"Confidence: {top_confidence*100:.2f}%\n"
+                    f"{user_data}"
+                )
+
+            bot_msg = await bot.send_message(os.getenv("DEVELOPER_ID"), response, parse_mode="Markdown")
+            group_admin = (await Group.aio_get(Group.id == message.chat.id)).user_id
+    
+            if nsfw:
+                await bot.send_message(
+                    group_admin, 
+                    f"🚨 Alert 🚨\n\nlink: {message_link}",
+                    reply_markup=await get_false_inkb(bot_msg.message_id),
+                    )
+
+        except asyncio.CancelledError:
+            # Worker is being cancelled during shutdown
+            break
+        except Group.DoesNotExist:
+            pass # TODO: Handle group not found
+        except Exception as e:
+            print(f"[NSFW Worker Error] {e}")
+        finally:
+            if task_retrieved:
+                nsfw_queue.task_done()
+
 
 # --- START CMD ---
 @dp.message(Command('start'), F.chat.type == ChatType.PRIVATE)
 async def start_cmd(message: types.Message):
-    await message.reply("Welcome!\n\nP.s. Currently we only support supergroups.")
+    await message.reply("👋 Welcome!\nTo start monitoring just add me to your super group\n\nP.s. Currently we only support supergroups.")
     await User.aio_get_or_create(id=message.from_user.id)
 
 
@@ -46,9 +111,9 @@ async def added_to_group(update: types.ChatMemberUpdated, bot: Bot):
     user, created = await Group.aio_get_or_create(id=group_id, defaults={'user': user_id})
 
     if created:
-        await bot.send_message(user_id, f"Starting to monitor {update.chat.title}")
+        await bot.send_message(user_id, f"🔍 Starting to monitor {update.chat.title}")
     else:
-        await bot.send_message(user_id, f"I was already added to group {update.chat.title}")
+        await bot.send_message(user_id, f"🧐 I was already added to group {update.chat.title}")
 
 
 @dp.my_chat_member(
@@ -62,7 +127,7 @@ async def removed_from_group(update: types.ChatMemberUpdated, bot: Bot):
         group = await Group.aio_get(id=group_id)
         user_id = group.user_id
         await group.aio_delete_instance()
-        await bot.send_message(user_id, f"Stopped monitoring {update.chat.title}")
+        await bot.send_message(user_id, f"❌ Stopped monitoring {update.chat.title}")
     except Group.DoesNotExist:
         print("Group not found in DB")
 
@@ -77,14 +142,14 @@ async def group_message_handler(message: types.Message):
     user_photo = user.photo
 
     if not user_photo:
-        print("No profile photo found.")
+        # print("No profile photo found.") #TODO: Log this event
         return
 
     channel = await bot.get_chat(user.personal_chat.id)
     channel_photo = channel.photo
 
     if not channel_photo:
-        print("No channel photo found.")
+        # print("No channel photo found.") #TODO: Log this event
         return
 
     
@@ -93,49 +158,8 @@ async def group_message_handler(message: types.Message):
 
     downloaded_file = await bot.download_file(file_path)
     image_bytes = downloaded_file.getvalue()
-
-    result = is_nsfw(image_bytes)
-
-    nsfw = result['is_nsfw']
-    nsfw_confidence = result['nsfw_confidence']
-    top_category = result['top_category']
-    top_confidence = result['top_confidence']
-
-
-    stripped_chat_id = str(message.chat.id).removeprefix("-100")
-    message_link = f"https://t.me/{message.chat.username if message.chat.username else 'c/' + stripped_chat_id}/{message.message_id}"
-
-    user_data = f"link {message_link}\n\n" \
-                f"User: {user.full_name} (id: {user.id}) [Profile](tg://user?id={user.id}) username: @{user.username}"
-
-    if nsfw:
-        response = f"🚨 NSFW Content Detected! 🚨\n\n" \
-                   f"Top Category: {top_category}\n" \
-                   f"Confidence: {top_confidence*100:.2f}%\n" \
-                   f"NSFW Confidence: {nsfw_confidence*100:.2f}%\n\n" \
-                   f"{user_data}"
-    else:
-        response = f"✅ This image seems safe for work!\n\n" \
-                   f"Top Category: {top_category}\n" \
-                   f"Confidence: {top_confidence*100:.2f}%\n" \
-                   f"{user_data}"
-
-    bot_msg = await bot.send_message(os.getenv("ADMIN_ID"), response, parse_mode="Markdown")
-
-    try:
-        group_admin = (await Group.aio_get(Group.id == message.chat.id)).user_id
-    except Group.DoesNotExist:
-        return
-    
-    if nsfw:
-        try:
-            await bot.send_message(
-                group_admin, 
-                f"🚨 Alert 🚨\n\nlink: {message_link}",
-                reply_markup=await get_false_inkb(bot_msg.message_id),
-                )
-        except Exception as e:
-            print(f"Error sending message to group admin: {e}")
+    # print("Putting task in queue...")
+    await nsfw_queue.put((message, image_bytes))
 
 
 
@@ -143,7 +167,7 @@ async def group_message_handler(message: types.Message):
 @dp.callback_query(FalseAlertCallback.filter())
 async def false_alert_handler(callback: types.CallbackQuery, callback_data: FalseAlertCallback):
     await bot.send_message(
-        os.getenv("ADMIN_ID"),
+        os.getenv("DEVELOPER_ID"),
         f"📩 False Alert Reported!\n\n",
         reply_to_message_id=callback_data.message_id
     )
@@ -174,6 +198,9 @@ async def startup():
         db.create_tables([User, Group])
 
     await db.aio_connect()
+
+    for _ in range(4):
+        asyncio.create_task(nsfw_worker(bot))
 
 
 @dp.shutdown()

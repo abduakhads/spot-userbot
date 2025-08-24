@@ -2,72 +2,66 @@ from PIL import Image
 import tflite_runtime.interpreter as tflite
 import io
 import numpy as np
+import time
+import math
+import threading
+import os
+from dotenv import load_dotenv
 
-# Load TFLite model
-interpreter = tflite.Interpreter(model_path="model_int8.tflite")
-interpreter.allocate_tensors()
+load_dotenv()
 
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+class_labels = ['drawings', 'hentai', 'neutral', 'porn', 'sexy']
 
-class_labels = ['drawings',
-                'hentai',
-                'neutral',
-                'porn',
-                'sexy']
+_interpreter = None
+_interpreter_lock = threading.Lock()
+
+def get_interpreter():
+    """Get a singleton interpreter instance."""
+    global _interpreter
+    if _interpreter is None:
+        _interpreter = tflite.Interpreter(model_path="model_int8.tflite")
+        _interpreter.allocate_tensors()
+    return _interpreter
 
 def preprocess(image_bytes):
-    # Open the image directly from bytes
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((224, 224))
-
-    # Convert the image into a numpy-like array structure for TFLite
     img_array = np.array(img, dtype=np.uint8)
-    
-    # Add batch dimension: shape becomes [1, 224, 224, 3]
     batch_data = np.expand_dims(img_array, axis=0)
     
-    # Clean up image object after processing
-    del img
-
+    img.close()
+    del img_array
+    
     return batch_data
 
 def is_nsfw(image_bytes, threshold=0.5):
-    """
-    Check if image is NSFW based on threshold
-    
-    Args:
-        image_path: Path to the image file
-        threshold: Minimum probability to consider NSFW (default: 0.5 = 50%)
-    
-    Returns:
-        dict: {
-            'is_nsfw': bool,
-            'confidence': float,
-            'category': str,
-            'all_probabilities': dict
-        }
-    """
-    batch_data = preprocess(image_bytes)
-    
-    interpreter.set_tensor(input_details[0]['index'], batch_data)
-    interpreter.invoke()
-    pred = interpreter.get_tensor(output_details[0]['index'])[0]
-    
-    # Apply softmax to get proper probabilities
-    import math
-    exp_values = [math.exp(x/100.0) for x in pred]  # Scale down for numerical stability
+    if bool(os.getenv("DEBUG", False)):
+        print("Processing image...")
+        time.sleep(10)
+        print("Done sleep...")
+
+    with _interpreter_lock:
+        interpreter = get_interpreter()
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
+        
+        batch_data = preprocess(image_bytes)
+        
+        try:
+            interpreter.set_tensor(input_details[0]['index'], batch_data)
+            interpreter.invoke()
+            
+            raw_output = interpreter.get_tensor(output_details[0]['index'])
+            pred_list = [float(x) for x in raw_output[0]]
+            
+        finally:
+            del batch_data
+
+    exp_values = [math.exp(x/100.0) for x in pred_list]
     sum_exp = sum(exp_values)
     probs = {label: exp_val/sum_exp for label, exp_val in zip(class_labels, exp_values)}
     
-    
-    # Define NSFW categories
     nsfw_categories = ['porn', 'hentai', 'sexy']
-    safe_categories = ['neutral', 'drawings']
-    
-    # Calculate total NSFW probability
     nsfw_prob = sum(probs[cat] for cat in nsfw_categories)
-    
-    # Find the highest probability category
     top_category = max(probs, key=probs.get)
     top_confidence = probs[top_category]
     
