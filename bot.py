@@ -17,6 +17,15 @@ load_dotenv()
 nsfw_queue = asyncio.Queue()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+USE_WEBHOOK = bool(os.getenv("USE_WEBHOOK", False))
+
+if USE_WEBHOOK:
+    WEB_SERVER_HOST = "127.0.0.1"
+    WEB_SERVER_PORT = 8080
+    WEBHOOK_PATH = "/webhook"
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+    BASE_WEBHOOK_URL = os.getenv("BASE_WEBHOOK_URL")
+
 
 
 bot = Bot(token=BOT_TOKEN)
@@ -202,12 +211,28 @@ async def startup():
     for _ in range(4):
         asyncio.create_task(nsfw_worker(bot))
 
+    if USE_WEBHOOK:
+        await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
+
 
 @dp.shutdown()
 async def shutdown():
-    await bot.session.close()
-    await db.aio_close()
-    db.close()
+    try:
+        await bot.delete_webhook()
+    except Exception:
+        pass
+    
+    try:
+        await db.aio_close()
+        db.close()
+    except Exception:
+        pass
+    
+    try:
+        await bot.session.close()
+    except Exception:
+        pass
+    
     print("Offline")
 
 
@@ -217,4 +242,34 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if not USE_WEBHOOK:
+        asyncio.run(main())
+    else:
+        from aiohttp import web
+        from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+
+
+        app = web.Application()
+
+        webhook_requests_handler = SimpleRequestHandler(
+            dispatcher=dp,
+            bot=bot,
+            secret_token=WEBHOOK_SECRET,
+        )
+
+        webhook_requests_handler.register(app, path=WEBHOOK_PATH)
+        setup_application(app, dp, bot=bot)
+
+        # async def cleanup(app):
+        #     await shutdown()
+            
+        # app.on_cleanup.append(cleanup)
+
+        try:
+            web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
+        except KeyboardInterrupt:
+            print("Received interrupt signal")
+        # finally:
+        #     loop = asyncio.get_event_loop()
+        #     if not loop.is_closed():
+        #         loop.run_until_complete(cleanup())
