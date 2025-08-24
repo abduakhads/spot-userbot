@@ -6,7 +6,7 @@
 
 ## NSFW Telegram Bot Detector 🔍
 
-> The lightest NSFW userbot detector for Telegram groups
+> Light Telegram Bot to spot user bots in groups with NSFW content in their profile picture
 
 ## Background
 
