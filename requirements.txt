@@ -1,0 +1,9 @@
+aiogram>=3.22.0
+aiopg>=1.4.0
+numpy==1.23.5
+peewee>=3.18.2
+peewee-async>=1.2.0
+pillow>=11.3.0
+psycopg2-binary>=2.9.10
+python-dotenv>=1.1.1
+tflite-runtime==2.14.0
