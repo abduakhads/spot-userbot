@@ -103,7 +103,7 @@ async def nsfw_worker(bot: Bot):
 # --- START CMD ---
 @dp.message(Command('start'), F.chat.type == ChatType.PRIVATE)
 async def start_cmd(message: types.Message):
-    await message.reply("👋 Welcome!\nTo start monitoring just add me to your super group\n\nP.s. Currently we only support supergroups.")
+    await message.reply("👋 Welcome!\nTo start monitoring just add me to your super group. (no need to add as admin)\n\nP.s. Currently we only support supergroups.")
     await User.aio_get_or_create(id=message.from_user.id)
 
 
