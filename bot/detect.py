@@ -19,7 +19,9 @@ def get_interpreter():
     """Get a singleton interpreter instance."""
     global _interpreter
     if _interpreter is None:
-        _interpreter = tflite.Interpreter(model_path="model_int8.tflite")
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(current_dir, "model", "model_int8.tflite")
+        _interpreter = tflite.Interpreter(model_path=model_path)
         _interpreter.allocate_tensors()
     return _interpreter
 
