@@ -1,6 +1,6 @@
 from aiogram import Bot, Router, F, types
 from aiogram.enums import ChatType
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 
 from bot.utils import get_time
 from bot.database import User
@@ -13,10 +13,15 @@ router = Router()
 
 # --- START CMD ---
 @router.message(Command('start'), F.chat.type == ChatType.PRIVATE)
-async def start_cmd(message: types.Message):
-    await message.reply("👋 Welcome!\nTo start monitoring just add me to your super group. (no need to add as admin)\n\nP.s. Currently we only support supergroups.")
-    await User.aio_get_or_create(id=message.from_user.id)
-
+async def start_cmd(message: types.Message, command: CommandObject):
+    try:
+        if not command.args:
+            await message.reply("👋 Welcome!\nTo start monitoring just add me to your super group. (no need to add as admin)\n\nP.s. Currently we only support supergroups.")
+        else:
+            await message.reply(f"👋 Welcome!\n\nNow You can add me to group again(no need to add as admin)\n\nP.s. Currently we only support supergroups.")
+        await User.aio_get_or_create(id=message.from_user.id)
+    except Exception as e:
+        print(f"{get_time()} - [Error (start_cmd)] {e}")
 
 
 # --- ANNOUNCE CMD ---

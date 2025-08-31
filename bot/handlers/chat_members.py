@@ -3,7 +3,7 @@ from aiogram.enums import ChatType
 from aiogram.filters import IS_MEMBER, IS_NOT_MEMBER, ChatMemberUpdatedFilter
 
 from bot.utils import get_time
-from bot.database import Group
+from bot.database import Group, User
 
 router = Router()
 
@@ -13,11 +13,16 @@ router = Router()
         ChatMemberUpdatedFilter(IS_MEMBER), 
         F.chat.type.in_([ChatType.SUPERGROUP])
     )
-async def added_to_group(update: types.ChatMemberUpdated, bot: Bot):
+async def added_to_super_group(update: types.ChatMemberUpdated, bot: Bot):
     user_id = update.from_user.id
     group_id = update.chat.id
+    user = await User.aio_get_or_none(id=user_id)
+    if not user:
+        await update.answer(f"[{update.from_user.full_name}](tg://user?id={update.from_user.id}) Please first start a chat with me!\n\nsend [/start](t.me/Randomayzerrobot?start=retry)", parse_mode="Markdown")
+        await bot.leave_chat(group_id)
+        return
 
-    user, created = await Group.aio_get_or_create(id=group_id, defaults={'user': user_id})
+    group, created = await Group.aio_get_or_create(id=group_id, defaults={'user': user_id})
 
     try:
         if created:
@@ -41,8 +46,28 @@ async def removed_from_group(update: types.ChatMemberUpdated, bot: Bot):
         user_id = group.user_id
         await group.aio_delete_instance()
         await bot.send_message(user_id, f"❌ Stopped monitoring {update.chat.title}")
-    except Group.DoesNotExist:
-        print(f"{get_time()} - [Group Not Found] Group not found in DB")
+    # except Group.DoesNotExist:
+    #     print(f"{get_time()} - [Group Not Found] Group not found in DB")
     except:
         pass #TODO
-        
+
+
+@router.my_chat_member(
+    ChatMemberUpdatedFilter(IS_NOT_MEMBER),
+    F.chat.type.in_([ChatType.PRIVATE])
+)
+async def blocked_bot(update: types.ChatMemberUpdated, bot: Bot):
+    groups = await Group.select().where(Group.user_id == update.from_user.id).aio_execute()
+    for group in groups:
+        await bot.leave_chat(group.id)
+        # await group.aio_delete_instance()
+
+    await User.delete().where(User.id == update.from_user.id).aio_execute()
+
+
+@router.my_chat_member(
+        ChatMemberUpdatedFilter(IS_MEMBER), 
+        F.chat.type.in_([ChatType.GROUP])
+    )
+async def added_to_group(update: types.ChatMemberUpdated, bot: Bot):
+    await bot.leave_chat(update.chat.id)

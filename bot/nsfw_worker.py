@@ -20,6 +20,14 @@ async def nsfw_worker(bot: Bot):
             message, image_bytes = await nsfw_queue.get()
             task_retrieved = True
 
+            group = (await Group.aio_get_or_none(Group.id == message.chat.id))
+            
+            if not group:
+                await bot.leave_chat(message.chat.id)
+                continue
+
+            group_admin = group.user_id
+
             result = await asyncio.to_thread(is_nsfw, image_bytes)
 
             nsfw = result['is_nsfw']
@@ -66,8 +74,7 @@ async def nsfw_worker(bot: Bot):
                 # If Markdown parsing fails, send without formatting
                 print(f"{get_time()} - Markdown parse error, sending as plain text: {parse_error}")
                 bot_msg = await bot.send_message(DEVELOPER_ID, response)
-            group_admin = (await Group.aio_get(Group.id == message.chat.id)).user_id
-    
+
             if nsfw:
                 await bot.send_message(
                     group_admin, 
