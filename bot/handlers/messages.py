@@ -38,4 +38,3 @@ async def group_message_handler(message: types.Message, bot: Bot):
     image_bytes = downloaded_file.getvalue()
     # print("Putting task in queue...")
     await nsfw_queue.put((message, image_bytes))
-    print("here")
