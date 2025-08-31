@@ -11,8 +11,8 @@ from aiogram.filters.callback_data import CallbackData
 
 from aiogram.enums import ChatType
 
-from database import db, User, Group
-from detect import is_nsfw
+from bot.database import db, User, Group
+from bot.detect import is_nsfw
 
 load_dotenv()
 
