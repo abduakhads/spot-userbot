@@ -36,7 +36,7 @@ def preprocess(image_bytes):
     return batch_data
 
 def is_nsfw(image_bytes, threshold=0.5):
-    if bool(os.getenv("DEBUG", False)):
+    if eval(os.getenv("DEBUG", "False")):
         print("Processing image...")
         time.sleep(10)
         print("Done sleep...")
