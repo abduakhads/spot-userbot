@@ -1,5 +1,7 @@
 import os
 import asyncio
+import logging
+import datetime
 
 from dotenv import load_dotenv
 
@@ -14,10 +16,18 @@ from detect import is_nsfw
 
 load_dotenv()
 
+logging.basicConfig(
+    level=logging.ERROR,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+
 nsfw_queue = asyncio.Queue()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-USE_WEBHOOK = bool(os.getenv("USE_WEBHOOK", False))
+USE_WEBHOOK = eval(os.getenv("USE_WEBHOOK", "False"))
+DEVELOPER_ID = os.getenv("DEVELOPER_ID")
 
 if USE_WEBHOOK:
     WEB_SERVER_HOST = "127.0.0.1"
@@ -35,11 +45,14 @@ dp = Dispatcher()
 class FalseAlertCallback(CallbackData, prefix="false_alert"):
     message_id: int | str 
 
+def get_time() -> str:
+    """Get the current time formatted as a string."""
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # --- NSFW WORKER ---
 async def nsfw_worker(bot: Bot):
     """Background worker to process NSFW detection tasks."""
-    print("NSFW Worker started...")
+    print(f"{get_time()} - NSFW Worker started...")
     while True:
         task_retrieved = False
         try:
@@ -56,16 +69,24 @@ async def nsfw_worker(bot: Bot):
             stripped_chat_id = str(message.chat.id).removeprefix("-100")
             message_link = f"https://t.me/{message.chat.username if message.chat.username else 'c/' + stripped_chat_id}/{message.message_id}"
 
+            # Escape special Markdown characters in user data
+            def escape_markdown(text):
+                if text is None:
+                    return "N/A"
+                return str(text).replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('(', '\\(').replace(')', '\\)').replace('`', '\\`')
+            
+            username = f"@{message.from_user.username}" if message.from_user.username else "N/A"
+            
             user_data = (
                 f"link {message_link}\n\n"
-                f"User: {message.from_user.full_name} (id: {message.from_user.id}) "
-                f"[Profile](tg://user?id={message.from_user.id}) username: @{message.from_user.username}"
+                f"User: {escape_markdown(message.from_user.full_name)} (id: {message.from_user.id}) "
+                f"[Profile](tg://user?id={message.from_user.id}) username: {escape_markdown(username)}"
             )
 
             if nsfw:
                 response = (
                     f"🚨 NSFW Content Detected! 🚨\n\n"
-                    f"Top Category: {top_category}\n"
+                    f"Top Category: {escape_markdown(top_category)}\n"
                     f"Confidence: {top_confidence*100:.2f}%\n"
                     f"NSFW Confidence: {nsfw_confidence*100:.2f}%\n\n"
                     f"{user_data}"
@@ -73,12 +94,17 @@ async def nsfw_worker(bot: Bot):
             else:
                 response = (
                     f"✅ The image seems safe for work!\n\n"
-                    f"Top Category: {top_category}\n"
+                    f"Top Category: {escape_markdown(top_category)}\n"
                     f"Confidence: {top_confidence*100:.2f}%\n"
                     f"{user_data}"
                 )
 
-            bot_msg = await bot.send_message(os.getenv("DEVELOPER_ID"), response, parse_mode="Markdown")
+            try:
+                bot_msg = await bot.send_message(DEVELOPER_ID, response, parse_mode="Markdown")
+            except Exception as parse_error:
+                # If Markdown parsing fails, send without formatting
+                print(f"{get_time()} - Markdown parse error, sending as plain text: {parse_error}")
+                bot_msg = await bot.send_message(DEVELOPER_ID, response)
             group_admin = (await Group.aio_get(Group.id == message.chat.id)).user_id
     
             if nsfw:
@@ -94,7 +120,7 @@ async def nsfw_worker(bot: Bot):
         except Group.DoesNotExist:
             pass # TODO: Handle group not found
         except Exception as e:
-            print(f"[NSFW Worker Error] {e}")
+            print(f"{get_time()} - [NSFW Worker Error] {e}")
         finally:
             if task_retrieved:
                 nsfw_queue.task_done()
@@ -105,6 +131,25 @@ async def nsfw_worker(bot: Bot):
 async def start_cmd(message: types.Message):
     await message.reply("👋 Welcome!\nTo start monitoring just add me to your super group. (no need to add as admin)\n\nP.s. Currently we only support supergroups.")
     await User.aio_get_or_create(id=message.from_user.id)
+
+
+
+# --- ANNOUNCE CMD ---
+@dp.message(Command('say'), F.from_user.id == int(DEVELOPER_ID), F.chat.type == ChatType.PRIVATE)
+async def announce_cmd(message: types.Message):
+    text_parts = message.text.split(maxsplit=1)
+    if len(text_parts) < 2:
+        await message.reply("Please provide announcement text after the command.")
+        return
+    
+    announcement_text = text_parts[1]
+    users = await User.select().aio_execute()
+
+    for user in users:
+        try:
+            await bot.send_message(user.id, f"📢 Announcement: \n\n{announcement_text}")
+        except Exception as e:
+            print(f"{get_time()} - Failed to send message to {user.id}: {e}")
 
 
 
@@ -138,7 +183,7 @@ async def removed_from_group(update: types.ChatMemberUpdated, bot: Bot):
         await group.aio_delete_instance()
         await bot.send_message(user_id, f"❌ Stopped monitoring {update.chat.title}")
     except Group.DoesNotExist:
-        print("Group not found in DB")
+        print(f"{get_time()} - [Group Not Found] Group not found in DB")
 
 
 
@@ -152,6 +197,10 @@ async def group_message_handler(message: types.Message):
 
     if not user_photo:
         # print("No profile photo found.") #TODO: Log this event
+        return
+
+    if not user.personal_chat:
+        # print("No personal chat found.") #TODO: Log this event
         return
 
     channel = await bot.get_chat(user.personal_chat.id)
@@ -176,7 +225,7 @@ async def group_message_handler(message: types.Message):
 @dp.callback_query(FalseAlertCallback.filter())
 async def false_alert_handler(callback: types.CallbackQuery, callback_data: FalseAlertCallback):
     await bot.send_message(
-        os.getenv("DEVELOPER_ID"),
+        DEVELOPER_ID,
         f"📩 False Alert Reported!\n\n",
         reply_to_message_id=callback_data.message_id
     )
@@ -202,7 +251,7 @@ async def get_false_inkb(message_id: str) -> types.InlineKeyboardMarkup:
 # --- SETUP ---
 @dp.startup()
 async def startup():
-    print("Online")
+    print(f"{get_time()} - Online")
     with db.allow_sync():
         db.create_tables([User, Group])
 
@@ -232,8 +281,8 @@ async def shutdown():
         await bot.session.close()
     except Exception:
         pass
-    
-    print("Offline")
+
+    print(f"{get_time()} - Offline")
 
 
 async def main():
@@ -268,7 +317,7 @@ if __name__ == "__main__":
         try:
             web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
         except KeyboardInterrupt:
-            print("Received interrupt signal")
+            print(f"{get_time()} - Received interrupt signal")
         # finally:
         #     loop = asyncio.get_event_loop()
         #     if not loop.is_closed():
