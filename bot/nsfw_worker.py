@@ -36,7 +36,8 @@ async def nsfw_worker(bot: Bot):
             top_confidence = result['top_confidence']
 
             stripped_chat_id = str(message.chat.id).removeprefix("-100")
-            message_link = f"https://t.me/{message.chat.username if message.chat.username else 'c/' + stripped_chat_id}/{message.message_id}"
+            chat_link = f"https://t.me/{message.chat.username if message.chat.username else 'c/' + stripped_chat_id}"
+            message_link = chat_link + f"/{message.message_id}"
 
             # Escape special Markdown characters in user data
             def escape_markdown(text):
@@ -75,12 +76,28 @@ async def nsfw_worker(bot: Bot):
                 print(f"{get_time()} - Markdown parse error, sending as plain text: {parse_error}")
                 bot_msg = await bot.send_message(DEVELOPER_ID, response)
 
+            notification = "🚨 Alert 🚨\n\n"
+            notification += "Confidence: " + f"{top_confidence*100:.2f}%\n\n"
+            notification += ("link: " + message_link) if not group.delete_message else ("in group: " + chat_link) + "\n"
+            notification += "\nuser message was deleted" if group.delete_message else ""
+            notification += "\nuser was kicked" if group.kick_bot else ""
+
             if nsfw:
-                await bot.send_message(
-                    group_admin, 
-                    f"🚨 Alert 🚨\n\nlink: {message_link}",
-                    reply_markup=await get_false_inkb(bot_msg.message_id),
+                if group.delete_message:
+                    await bot.delete_message(
+                        chat_id=group.id,
+                        message_id=message.message_id
                     )
+                if group.kick_bot:
+                    await bot.ban_chat_member(
+                        chat_id=group.id, 
+                        user_id=message.from_user.id,
+                        revoke_messages=True)
+                await bot.send_message(
+                    chat_id=group_admin,
+                    text=notification,
+                    reply_markup=await get_false_inkb(bot_msg.message_id),
+                )
 
         except asyncio.CancelledError:
             # Worker is being cancelled during shutdown

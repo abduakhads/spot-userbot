@@ -1,6 +1,6 @@
 from aiogram import Bot, Router, F, types
 from aiogram.enums import ChatType
-from aiogram.filters import IS_MEMBER, IS_NOT_MEMBER, ChatMemberUpdatedFilter
+from aiogram.filters import ChatMemberUpdatedFilter, IS_NOT_MEMBER, JOIN_TRANSITION, IS_MEMBER
 
 from bot.utils import get_time
 from bot.database import Group, User
@@ -10,8 +10,9 @@ router = Router()
 
 # --- BOT WAS ADDED TO SUPER GROUP ---
 @router.my_chat_member(
-        ChatMemberUpdatedFilter(IS_MEMBER), 
-        F.chat.type.in_([ChatType.SUPERGROUP])
+        ChatMemberUpdatedFilter(JOIN_TRANSITION), 
+        F.chat.type.in_([ChatType.SUPERGROUP]),
+        # F.old_chat_member.status.not_in(["member", "administrator", "creator"])
     )
 async def added_to_super_group(update: types.ChatMemberUpdated, bot: Bot):
     user_id = update.from_user.id
@@ -28,9 +29,33 @@ async def added_to_super_group(update: types.ChatMemberUpdated, bot: Bot):
         if created:
             await bot.send_message(user_id, f"🔍 Starting to monitor {update.chat.title}")
         else:
-            await bot.send_message(user_id, f"🧐 I was already added to group {update.chat.title}")
+            await bot.send_message(user_id, f"🧐 wasn't I already added to group {update.chat.title}")
     except:
         pass #TODO
+
+
+
+# --- BOT PERMISSIONS WERE CHANGED ---
+@router.my_chat_member(
+    ChatMemberUpdatedFilter(IS_MEMBER),
+    F.chat.type.in_([ChatType.SUPERGROUP])
+)
+async def permission_change(update: types.ChatMemberUpdated, bot: Bot):
+    member = await bot.get_chat_member(update.chat.id, bot.id)
+    group = await Group.aio_get(Group.id == update.chat.id)
+    flag = False
+
+    if update.old_chat_member.status in ["administrator"] and not member.status in ["administrator"]:
+        flag = True
+
+    if flag or not member.can_delete_messages:
+        group.delete_message = False
+
+    if flag or not member.can_restrict_members:
+        group.kick_bot = False
+
+    await group.aio_save()
+
 
 
 # --- BOT WAS REMOVED FROM SUPER GROUP ---
@@ -52,6 +77,8 @@ async def removed_from_group(update: types.ChatMemberUpdated, bot: Bot):
         pass #TODO
 
 
+
+# --- BOT WAS BLOCKED BY USER ---
 @router.my_chat_member(
     ChatMemberUpdatedFilter(IS_NOT_MEMBER),
     F.chat.type.in_([ChatType.PRIVATE])
@@ -65,9 +92,12 @@ async def blocked_bot(update: types.ChatMemberUpdated, bot: Bot):
     await User.delete().where(User.id == update.from_user.id).aio_execute()
 
 
+
+# --- BOT WAS ADDED TO GROUP ---
 @router.my_chat_member(
-        ChatMemberUpdatedFilter(IS_MEMBER), 
+        ChatMemberUpdatedFilter(JOIN_TRANSITION), 
         F.chat.type.in_([ChatType.GROUP])
     )
 async def added_to_group(update: types.ChatMemberUpdated, bot: Bot):
+    await update.answer("I only work in super groups. Please add me to a super group.")
     await bot.leave_chat(update.chat.id)

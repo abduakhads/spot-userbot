@@ -1,11 +1,18 @@
 from aiogram import Bot, Router, F, types
 from aiogram.enums import ChatType
 
+from bot import keyboards as kb
+from bot.handlers import common
 from bot.nsfw_worker import nsfw_queue
-
+from bot.database import Group
 
 router = Router()
 
+
+# --- MY GROUP BTN HANDLER ---
+@router.message(F.text == "My Groups 👥", F.chat.type == ChatType.PRIVATE)
+async def my_groups_btn_handler(message: types.Message, bot: Bot):
+    await common.list_my_groups(message, bot, message.from_user.id)
 
 
 # --- SUPER GROUP MESSAGE HANDLER ---
@@ -38,3 +45,12 @@ async def group_message_handler(message: types.Message, bot: Bot):
     image_bytes = downloaded_file.getvalue()
     # print("Putting task in queue...")
     await nsfw_queue.put((message, image_bytes))
+
+
+
+# @router.message(lambda message: message.left_chat_member)
+# async def delete_left_chat_member_service_message(message: types.Message, bot: Bot):
+#     try:
+#         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+#     except Exception as e:
+#         print(f"Failed to delete leave/kick message: {e}")
