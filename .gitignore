@@ -13,3 +13,6 @@ wheels/
 img
 
 tmp*
+lab.py
+
+test_db_connection.py
