@@ -19,7 +19,7 @@ async def added_to_super_group(update: types.ChatMemberUpdated, bot: Bot):
     group_id = update.chat.id
     user = await User.aio_get_or_none(id=user_id)
     if not user:
-        await update.answer(f"[{update.from_user.full_name}](tg://user?id={update.from_user.id}) Please first start a chat with me!\n\nsend [/start](t.me/Randomayzerrobot?start=retry)", parse_mode="Markdown")
+        await update.answer(f"[{update.from_user.full_name}](tg://user?id={update.from_user.id}) Please first start a chat with me!\n\nsend [/start](t.me/{(await bot.get_me()).username}?start=retry)", parse_mode="Markdown")
         await bot.leave_chat(group_id)
         return
 
