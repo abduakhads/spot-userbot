@@ -116,5 +116,12 @@ async def back_button_handler(callback: types.CallbackQuery, callback_data: util
 # --- CLOSE BTN ---
 @router.callback_query(F.data == "close")
 async def close_group_settings_handler(callback: types.CallbackQuery, bot: Bot):
-    await callback.message.delete()
+    try:
+        await bot.delete_message(callback.message.chat.id, callback.message.message_id)
+    except:
+        id = (await callback.message.edit_text("closed")).message_id
+        try:
+            await bot.delete_message(callback.message.chat.id, id)
+        except:
+            print("error: line 126 callback_queries.py")
     await callback.answer()
