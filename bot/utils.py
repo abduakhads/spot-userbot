@@ -33,6 +33,10 @@ class ConfirmCallback(CallbackData, prefix="confirmation"):
     function: str
 
 
+class DonateAmountCallback(CallbackData, prefix="donate_amount"):
+    amount: int
+
+
 def get_time() -> str:
     """Get the current time formatted as a string."""
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -2,6 +2,7 @@ from aiogram import Bot, types
 
 from bot import keyboards as kb
 from bot.database import Group
+from bot.settings import HELP_TEXT, DEMO_VIDEO
 
 
 
@@ -11,7 +12,7 @@ async def list_my_groups(message: types.Message, bot: Bot, user_id: int, callbac
     group_list = [(await bot.get_chat(group.id)) for group in groups]
     if message.from_user.id == bot.id:
         if not groups:
-            await message.edit_text("You are not monitoring any groups.")
+            await message.edit_text("You are not monitoring any groups.", reply_markup=await kb.get_add_group_inkb())
             return
         await message.edit_text(
             text="You are monitoring the following groups:",
@@ -20,7 +21,7 @@ async def list_my_groups(message: types.Message, bot: Bot, user_id: int, callbac
         return
     
     if not groups:
-        await message.reply("You are not monitoring any groups.")
+        await message.reply("You are not monitoring any groups.", reply_markup=await kb.get_add_group_inkb())
         return
 
     await message.delete()
@@ -63,3 +64,30 @@ async def group_settings(callback: types.CallbackQuery, bot: Bot, callback_data 
             text=text,
             reply_markup=await kb.get_group_settings_inkb(group)
         )
+
+
+
+async def help_cmd(message: types.Message, bot: Bot):
+    await message.reply_video(
+        video=DEMO_VIDEO,
+        caption=HELP_TEXT,
+        parse_mode="MarkdownV2",
+        show_caption_above_media=True,
+    )
+
+
+
+async def donate_amount_cmd(message: types.Message, bot: Bot, amount: int):
+    prices = [types.LabeledPrice(label="XTR", amount=amount)]
+    await message.answer_invoice(
+        title="Donation",
+        description=f"🌱 Support the project with {amount} ⭐️",
+        prices=prices,
+
+        provider_token="",
+
+        payload=f"donation_{amount}_stars",
+
+        currency="XTR",
+        reply_markup=await kb.get_donate_inkb(amount)
+    )

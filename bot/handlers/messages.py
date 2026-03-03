@@ -15,6 +15,23 @@ async def my_groups_btn_handler(message: types.Message, bot: Bot):
     await common.list_my_groups(message, bot, message.from_user.id)
 
 
+# --- HELP BTN HANDLER ---
+@router.message(F.text == "💬 Help", F.chat.type == ChatType.PRIVATE)
+async def help_btn_handler(message: types.Message, bot: Bot):
+    await common.help_cmd(message, bot)
+
+
+# --- DONATE BTN HANDLER ---
+@router.message(F.text == "Donate 🕊️", F.chat.type == ChatType.PRIVATE)
+async def donate_btn_handler(message: types.Message, bot: Bot):
+    await message.delete()
+    await message.answer(
+        text="🙏 Big thanks for considering a donation! \nYour support helps keep the bot running." \
+        "\n\nPlease choose the amount to donate:",
+        reply_markup=await kb.get_donations_inkb()
+    )
+
+
 # --- SUPER GROUP MESSAGE HANDLER ---
 @router.message(
         F.chat.type.in_([ChatType.SUPERGROUP]),

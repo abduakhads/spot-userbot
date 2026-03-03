@@ -125,3 +125,58 @@ async def close_group_settings_handler(callback: types.CallbackQuery, bot: Bot):
         except:
             print("error: line 126 callback_queries.py")
     await callback.answer()
+
+
+# --- DONATE AMOUNT ---
+@router.callback_query(utils.DonateAmountCallback.filter())
+async def donate_amount_handler(callback: types.CallbackQuery, callback_data: utils.DonateAmountCallback, bot: Bot):
+    await callback.answer()
+    await callback.message.delete()
+    amount = int(callback_data.amount)
+
+    if amount <= 0:
+        await callback.message.answer(
+            "For custom donation amounts, please use the /donate command followed by the amount you wish to donate. For example: \n\n`/donate 10` \n\nto donate 10 ⭐.",
+            parse_mode="Markdown"
+        )
+        return
+
+    await common.donate_amount_cmd(callback.message, bot, amount)
+
+
+# --- PRE CHECKOUT QUERY ---
+@router.pre_checkout_query()
+async def pre_checkout_query(query: types.PreCheckoutQuery):
+    await query.answer(
+        ok=True,
+    )
+
+
+# --- SUCCESSFUL PAYMENT ---
+@router.message(F.successful_payment)
+async def on_successfull_payment(message: types.Message, bot: Bot):
+    tid = message.successful_payment.telegram_payment_charge_id
+    # msgid = message.successful_payment.invoice_payload.split("_")[-1]
+    # await message.delete()
+    await bot.send_message(
+        DEVELOPER_ID,
+        f"💰 New Donation Received!\n\n"\
+        f"Amount: {message.successful_payment.total_amount} {message.successful_payment.currency}\nTelegram Charge ID: `{tid}`\n\n"\
+        f"from user: \n{message.from_user.full_name}\n"\
+        f"{'@'+message.from_user.username if message.from_user.username else 'No username'}\n"\
+        f"ID: `{message.from_user.id}`",
+        parse_mode="Markdown",
+        )
+        
+
+    await message.answer(
+        text="🫶 Thank you for your donation! Your support helps keep the bot running and improving. ",
+        message_effect_id="5159385139981059251",
+
+        # 🔥 - 5104841245755180586🌟
+        # 👍 - 5107584321108051014
+        # 👎 - 5104858069142078462
+        # ❤️ - 5159385139981059251
+        # 🎉 - 5046509860389126442
+        # 💩 - 5046589136895476101
+    )

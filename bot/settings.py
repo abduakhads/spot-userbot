@@ -23,3 +23,7 @@ WEB_SERVER_PORT = 8080 if USE_WEBHOOK else None
 WEBHOOK_PATH = "/webhook" if USE_WEBHOOK else None
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET") if USE_WEBHOOK else None
 BASE_WEBHOOK_URL = os.getenv("BASE_WEBHOOK_URL") if USE_WEBHOOK else None
+
+BOT_USERNAME = os.getenv("BOT_USERNAME")
+DEMO_VIDEO = os.getenv("DEMO_VIDEO")
+HELP_TEXT = os.getenv("HELP_TEXT")

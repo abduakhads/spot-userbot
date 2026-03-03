@@ -2,6 +2,7 @@ from aiogram import types
 
 from bot import utils
 from bot.database import Group
+from bot.settings import BOT_USERNAME
 
 async def get_false_inkb(message_id: str) -> types.InlineKeyboardMarkup:
     confrmkb = types.InlineKeyboardMarkup(
@@ -19,6 +20,7 @@ async def get_main_kb() -> types.ReplyKeyboardMarkup:
     main_kb = types.ReplyKeyboardMarkup(
         keyboard=[
             [types.KeyboardButton(text="My Groups 👥")],
+            [types.KeyboardButton(text="💬 Help"), types.KeyboardButton(text="Donate 🕊️")]
         ],
         resize_keyboard=True,
         is_persistent=True
@@ -31,7 +33,7 @@ async def get_groups_list_inkb(groups: list) -> types.InlineKeyboardMarkup:
         inline_keyboard=[
             [types.InlineKeyboardButton(text=group.title, callback_data=utils.GroupSettingsCallback(group_id=group.id).pack())] for group in groups
         ] + [
-            [types.InlineKeyboardButton(text="✖️ Close", callback_data="close")]
+            [types.InlineKeyboardButton(text="👥 Add", url=f"https://t.me/{BOT_USERNAME}?startgroup=true"), types.InlineKeyboardButton(text="✖️ Close", callback_data="close")]
         ]
     )
     
@@ -94,3 +96,87 @@ async def get_confirm_inkb(group_id: int | str, function: list) -> types.InlineK
         ]
     )
     return confirm_inkb
+
+
+async def get_add_group_inkb() -> types.InlineKeyboardMarkup:
+    add_group_inkb = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="➕ Add to Group",
+                    url=f"https://t.me/{BOT_USERNAME}?startgroup=true"
+                )
+            ]
+        ]
+    )
+    return add_group_inkb
+
+
+async def get_donations_inkb() -> types.InlineKeyboardMarkup:
+    donations_inkb = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="⭐️ 1",
+                    callback_data=utils.DonateAmountCallback(amount=1).pack()
+                ),
+                types.InlineKeyboardButton(
+                    text="⭐️ 5",
+                    callback_data=utils.DonateAmountCallback(amount=5).pack()
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="⭐️ 10",
+                    callback_data=utils.DonateAmountCallback(amount=10).pack()
+                ),
+                types.InlineKeyboardButton(
+                    text="⭐️ 20",
+                    callback_data=utils.DonateAmountCallback(amount=20).pack()
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="⭐️ 50",
+                    callback_data=utils.DonateAmountCallback(amount=50).pack()
+                ),
+                types.InlineKeyboardButton(
+                    text="⭐️ 100",
+                    callback_data=utils.DonateAmountCallback(amount=100).pack()
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="🖋 Custom Amount",
+                    callback_data=utils.DonateAmountCallback(amount=0).pack()
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="✖️ Cancel",
+                    callback_data="close"
+                )
+            ]
+        ]
+    )
+    return donations_inkb
+
+
+async def get_donate_inkb(amount: int) -> types.InlineKeyboardMarkup:
+    donate_inkb = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=f"Donate {amount} ⭐️ ",
+                    pay=True
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="✖️ Close",
+                    callback_data="close"
+                )
+            ]
+        ]
+    )
+    return donate_inkb
