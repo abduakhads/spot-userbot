@@ -63,7 +63,7 @@ async def group_message_handler(message: types.Message, bot: Bot):
 
         await bot.send_message(
             chat_id=DEVELOPER_ID,
-            text=f"{message_link}\n\No personal chat found {user.full_name} in {message.chat.full_name} (id: {user.id}). Skipping NSFW check."
+            text=f"{message_link}\n\nNo personal chat found {user.full_name} in {message.chat.full_name} (id: {user.id}). Skipping NSFW check."
         )
 
         return
