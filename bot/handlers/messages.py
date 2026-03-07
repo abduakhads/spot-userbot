@@ -43,16 +43,16 @@ async def group_message_handler(message: types.Message, bot: Bot):
         print("No profile photo found.") #TODO: Log this event
         return
 
-    if not user.personal_chat:
+    if not (user.personal_chat or user.bio):
         print("No personal chat found.") #TODO: Log this event
         return
 
     channel = await bot.get_chat(user.personal_chat.id)
     channel_photo = channel.photo
 
-    if not channel_photo:
-        print("No channel photo found.") #TODO: Log this event
-        return
+    # if not channel_photo:
+    #     print("No channel photo found.") #TODO: Log this event
+    #     return
 
     
     file_info = await bot.get_file(user_photo.big_file_id)
